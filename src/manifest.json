@@ -12,10 +12,10 @@
     "<all_urls>"
   ],
   "action": {
-    "default_popup": "popup.html",
+    "default_popup": "popup/popup.html",
     "default_title": "Debug Dump"
   },
-  "devtools_page": "devtools.html",
+  "devtools_page": "devtools/devtools.html",
   "background": {
     "service_worker": "service-worker.js"
   }

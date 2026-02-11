@@ -6,7 +6,7 @@ Chrome extension for one-click page state capture. Dumps HTML, console logs, net
 
 1. Open `chrome://extensions/`
 2. Enable **Developer mode**
-3. Click **Load unpacked** and select this directory
+3. Click **Load unpacked** and select the `src/` directory
 
 ## Usage
 

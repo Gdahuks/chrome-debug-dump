@@ -11,18 +11,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 No build system, package manager, or dependencies. Pure vanilla JavaScript loaded directly by the manifest. To develop:
 
 1. Open `chrome://extensions/` with Developer Mode enabled
-2. "Load unpacked" pointing to this directory
+2. "Load unpacked" pointing to the `src/` directory
 3. After code changes, click the refresh icon on the extension card (or reload the extension)
 
 No tests, linting, or formatting tools are configured.
 
 ## Architecture
 
-### Popup (`popup.html` / `popup.js`)
+### Popup (`src/popup/popup.html` / `popup.js`)
 - Settings-only UI triggered via the extension icon
 - Configures `basePath` and `idleTime` in `chrome.storage.local` (shared with DevTools panel)
 
-### DevTools Panel (`panel.html` / `panel.js`)
+### DevTools Panel (`src/devtools/panel.html` / `panel.js`)
 - Accessed via F12 → "Debug Dump" tab — the only place dumps happen
 - Uses `chrome.devtools.inspectedWindow.eval()` for script injection
 - Captures HAR via `chrome.devtools.network.getHAR()`
@@ -30,8 +30,8 @@ No tests, linting, or formatting tools are configured.
 - Listens to `chrome.storage.onChanged` to pick up settings changed via popup
 
 ### Supporting Files
-- **`devtools.js`** — Creates the DevTools panel, injects the console hook (inline via `eval`) on panel show and page navigation
-- **`service-worker.js`** — Background worker handling `captureViewport` (tab screenshot) and `dumpAll` (file downloads) messages
+- **`src/devtools/devtools.js`** — Creates the DevTools panel, injects the console hook (inline via `eval`) on panel show and page navigation
+- **`src/service-worker.js`** — Background worker handling `captureViewport` (tab screenshot) and `dumpAll` (file downloads) messages
 
 ### Key Technical Details
 - **Screenshot stitching**: Scrolls page in viewport-sized chunks, hides fixed elements (visibility:hidden) and un-sticks sticky elements (position:relative) for chunks after the first, then composites via canvas accounting for device pixel ratio
@@ -43,9 +43,9 @@ No tests, linting, or formatting tools are configured.
 
 | File | Role |
 |------|------|
-| `manifest.json` | Extension manifest (permissions, entry points) |
-| `service-worker.js` | Background: screenshots & file downloads |
-| `popup.html/js` | Settings UI (shared with panel) |
-| `panel.html/js` | DevTools panel UI & dump logic |
-| `devtools.html/js` | DevTools page & panel creation |
-| `panel.css` | Shared dark-theme styling |
+| `src/manifest.json` | Extension manifest (permissions, entry points) |
+| `src/service-worker.js` | Background: screenshots & file downloads |
+| `src/panel.css` | Shared dark-theme styling |
+| `src/popup/popup.html/js` | Settings UI (shared with panel) |
+| `src/devtools/panel.html/js` | DevTools panel UI & dump logic |
+| `src/devtools/devtools.html/js` | DevTools page & panel creation |
