@@ -26,7 +26,11 @@ After the dump completes, the output folder path is automatically copied to your
 
 You can skip the network idle wait at any time by clicking **Capture Now**.
 
-**Keyboard shortcut:** Press `Alt+Shift+D` to trigger a dump without reload (useful when you need to keep focus on the page, e.g. hovering over a tooltip). Customize the shortcut at `chrome://extensions/shortcuts`.
+**Keyboard shortcut:** Press `Alt+Shift+D` to trigger a dump without reload (works only with DevTools open). Customize the shortcut at `chrome://extensions/shortcuts`.
+
+## Capture Toggles
+
+Use the **Capture** chips to enable/disable individual data types: **HAR**, **HTML**, **Console**, **Meta**, **Screenshot**. Disabled types are skipped during the dump (shown as yellow in the progress bar). Toggles are synced between the panel and popup and persist across sessions.
 
 ## Settings
 
@@ -47,7 +51,7 @@ Downloads/<subfolder>/<hostname_path>-<timestamp>/
 
 For example: `Downloads/debug-dumps/example.com_page-2026-02-11_14-30-00/`
 
-Each folder contains:
+Each folder contains (depending on enabled capture toggles):
 
 | File | Contents |
 |------|----------|
