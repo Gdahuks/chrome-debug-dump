@@ -14,13 +14,23 @@ Chrome extension (Manifest v3) for one-click page state capture. Dumps HTML, con
 2. Go to the **Debug Dump** tab
 3. Click **Reload & Dump**
 
-The extension reloads the page, waits for network activity to settle, then captures everything. After the dump completes, the output folder path is automatically copied to your clipboard.
+![DevTools panel ready to dump](docs/panel-idle.png)
+
+The extension reloads the page, waits for network activity to settle, then captures everything. Progress is shown step-by-step.
+
+![Dump in progress with network idle countdown](docs/panel-progress.png)
+
+After the dump completes, the output folder path is automatically copied to your clipboard.
+
+![Dump complete with saved path](docs/panel-complete.png)
 
 You can skip the network idle wait at any time by clicking **Capture Now**.
 
 ## Settings
 
 Available both in the DevTools panel and via the extension popup icon (they stay in sync):
+
+![Popup settings](docs/popup-settings.png)
 
 - **Download subfolder** — subfolder name inside your Downloads directory (default: `debug-dumps`)
 - **Network idle (s)** — how many seconds of no network activity to wait before capturing (default: `2`, set to `0` to skip waiting)
