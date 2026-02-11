@@ -1,6 +1,7 @@
 chrome.commands.onCommand.addListener(function(command) {
   if (command === 'dump') {
-    chrome.runtime.sendMessage({ action: 'triggerDump' });
+    chrome.runtime.sendMessage({ action: 'triggerDump' }).catch(function() {});
+    chrome.storage.local.set({ triggerDump: Date.now() });
   }
 });
 

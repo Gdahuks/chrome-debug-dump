@@ -204,6 +204,17 @@ h1 {
   transition: width 0.1s linear;
 }
 
+/* Toggle chips */
+.toggle-section { margin-bottom: 16px; }
+.toggle-label { font-size: 11px; color: #999; margin-bottom: 6px; }
+.toggles { display: flex; flex-wrap: wrap; gap: 6px; }
+.toggle-chip {
+  padding: 3px 10px; border-radius: 3px; font-size: 12px;
+  border: none; cursor: pointer; transition: all 0.15s;
+}
+.toggle-chip.on  { background: #1e3a2a; color: #4ec96b; }
+.toggle-chip.off { background: #4a2020; color: #f87171; }
+
 /* Progress chips */
 .progress {
   margin-top: 12px;
@@ -230,13 +241,18 @@ h1 {
   color: #4ec96b;
 }
 
+.progress-item.skipped {
+  background: #3a3520;
+  color: #e0c050;
+}
+
 .progress-item.error {
   background: #4a2020;
   color: #f87171;
 }
 
 .status {
-  margin-top: 12px;
+  margin-top: 20px;
   font-size: 13px;
   min-height: 20px;
 }

@@ -3,6 +3,7 @@
 
   var MAX_SCREENSHOT_HEIGHT = 16384;
   var CAPTURE_DELAY = 200;
+  var DEFAULT_TOGGLES = { har: true, html: true, console: true, meta: true, screenshot: true };
 
   var dumpBtn = document.getElementById('dumpBtn');
   var dumpNoReloadBtn = document.getElementById('dumpNoReloadBtn');
@@ -18,11 +19,16 @@
   var idleLabel = document.getElementById('idleLabel');
   var idleBarFill = document.getElementById('idleBarFill');
   var captureNowBtn = document.getElementById('captureNowBtn');
+  var togglesContainer = document.getElementById('toggles');
+
+  var dumpToggles = Object.assign({}, DEFAULT_TOGGLES);
 
   // Load saved settings
-  chrome.storage.local.get(['basePath', 'idleTime'], function(result) {
+  chrome.storage.local.get(['basePath', 'idleTime', 'dumpToggles'], function(result) {
     if (result.basePath) basePathInput.value = result.basePath;
     if (result.idleTime !== undefined) idleTimeInput.value = result.idleTime;
+    if (result.dumpToggles) dumpToggles = Object.assign({}, DEFAULT_TOGGLES, result.dumpToggles);
+    applyToggleUI();
   });
 
   saveSettingsBtn.addEventListener('click', function() {
@@ -33,10 +39,35 @@
     setStatus('Settings saved.', 'success');
   });
 
-  // Sync settings changed via popup
+  // Toggle chips
+  togglesContainer.addEventListener('click', function(e) {
+    var btn = e.target.closest('.toggle-chip');
+    if (!btn) return;
+    var key = btn.getAttribute('data-key');
+    dumpToggles[key] = !dumpToggles[key];
+    applyToggleUI();
+    chrome.storage.local.set({ dumpToggles: dumpToggles });
+  });
+
+  function applyToggleUI() {
+    var chips = togglesContainer.querySelectorAll('.toggle-chip');
+    for (var i = 0; i < chips.length; i++) {
+      var key = chips[i].getAttribute('data-key');
+      chips[i].className = 'toggle-chip ' + (dumpToggles[key] ? 'on' : 'off');
+    }
+  }
+
+  // Sync settings changed via popup + keyboard shortcut trigger
   chrome.storage.onChanged.addListener(function(changes) {
     if (changes.basePath) basePathInput.value = changes.basePath.newValue;
     if (changes.idleTime) idleTimeInput.value = changes.idleTime.newValue;
+    if (changes.dumpToggles) {
+      dumpToggles = Object.assign({}, DEFAULT_TOGGLES, changes.dumpToggles.newValue);
+      applyToggleUI();
+    }
+    if (changes.triggerDump && !dumpBtn.disabled) {
+      startDumpNoReload();
+    }
   });
 
   dumpBtn.addEventListener('click', startDump);
@@ -67,7 +98,12 @@
   // ---- Helpers ----
 
   function copyToClipboard(text) {
-    return navigator.clipboard.writeText(text).catch(function() {
+    // DevTools panels block the Clipboard API — use the inspected page instead
+    var escaped = text.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return evalInPage("navigator.clipboard.writeText('" + escaped + "').then(function(){return true})").then(function(ok) {
+      if (!ok) throw new Error('copy failed');
+    }).catch(function() {
+      // Fallback: execCommand in panel
       var ta = document.createElement('textarea');
       ta.value = text;
       ta.style.position = 'fixed';
@@ -202,40 +238,69 @@
   }
 
   function performCapture() {
+    // Guard: at least one toggle must be on
+    var anyOn = Object.keys(dumpToggles).some(function(k) { return dumpToggles[k]; });
+    if (!anyOn) {
+      setStatus('Enable at least one capture type', 'error');
+      return Promise.resolve();
+    }
+
     setStatus('Collecting page state...', 'info');
+
+    // Mark disabled types as done immediately
+    var allSteps = ['har', 'html', 'console', 'meta', 'screenshot'];
+    for (var i = 0; i < allSteps.length; i++) {
+      if (!dumpToggles[allSteps[i]]) updateProgress(allSteps[i], 'skipped');
+    }
+
     return Promise.all([
-      collectHAR(),
-      collectHTML(),
-      collectConsoleLogs(),
-      collectMeta()
+      dumpToggles.har ? collectHAR() : Promise.resolve(null),
+      dumpToggles.html ? collectHTML() : Promise.resolve(null),
+      dumpToggles.console ? collectConsoleLogs() : Promise.resolve(null),
+      dumpToggles.meta ? collectMeta() : Promise.resolve(null)
     ]).then(function(results) {
       var har = results[0];
       var html = results[1];
       var consoleLogs = results[2];
       var meta = results[3];
 
-      setStatus('Capturing screenshot...', 'info');
-      return captureFullPageScreenshot().then(function(screenshotDataUrl) {
+      var screenshotPromise;
+      if (dumpToggles.screenshot) {
+        setStatus('Capturing screenshot...', 'info');
+        screenshotPromise = captureFullPageScreenshot();
+      } else {
+        screenshotPromise = Promise.resolve(null);
+      }
+
+      return screenshotPromise.then(function(screenshotDataUrl) {
         return {
           har: har, html: html, consoleLogs: consoleLogs, meta: meta,
           screenshotDataUrl: screenshotDataUrl
         };
       });
     }).then(function(data) {
-      var sanitizedUrl = sanitizeForFilename(data.meta.url);
-      var timestamp = formatTimestamp(new Date());
-      var basePath = basePathInput.value.trim() || 'debug-dumps';
-      var folderName = basePath + '/' + sanitizedUrl + '-' + timestamp;
+      // Need URL for folder name — get from meta or fall back to eval
+      var urlPromise = data.meta
+        ? Promise.resolve(data.meta.url)
+        : evalInPage('location.href');
 
-      updateProgress('download', 'active');
-      setStatus('Saving files...', 'info');
+      return urlPromise.then(function(url) {
+        var sanitizedUrl = sanitizeForFilename(url);
+        var timestamp = formatTimestamp(new Date());
+        var basePath = basePathInput.value.trim() || 'debug-dumps';
+        var folderName = basePath + '/' + sanitizedUrl + '-' + timestamp;
 
-      return saveAllFiles(folderName, {
-        'network.har': JSON.stringify(data.har, null, 2),
-        'page.html': data.html,
-        'console.json': JSON.stringify(data.consoleLogs, null, 2),
-        'meta.json': JSON.stringify(data.meta, null, 2)
-      }, data.screenshotDataUrl);
+        updateProgress('download', 'active');
+        setStatus('Saving files...', 'info');
+
+        var files = {};
+        if (data.har) files['network.har'] = JSON.stringify(data.har, null, 2);
+        if (data.html) files['page.html'] = data.html;
+        if (data.consoleLogs) files['console.json'] = JSON.stringify(data.consoleLogs, null, 2);
+        if (data.meta) files['meta.json'] = JSON.stringify(data.meta, null, 2);
+
+        return saveAllFiles(folderName, files, data.screenshotDataUrl);
+      });
     }).then(function(response) {
       updateProgress('download', 'done');
 

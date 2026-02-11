@@ -13,6 +13,16 @@
     <h1>Debug Dump</h1>
     <div class="note">Settings apply to the DevTools panel (F12 → Debug Dump).</div>
 
+    <div class="toggle-section">
+      <div class="toggle-label">Capture:</div>
+      <div class="toggles" id="toggles">
+        <button class="toggle-chip on" data-key="har" title="Network traffic (HAR)">HAR</button>
+        <button class="toggle-chip on" data-key="html" title="Page source HTML">HTML</button>
+        <button class="toggle-chip on" data-key="console" title="Console logs & errors">Console</button>
+        <button class="toggle-chip on" data-key="meta" title="URL, title, viewport, user agent">Meta</button>
+        <button class="toggle-chip on" data-key="screenshot" title="Full-page screenshot">Screenshot</button>
+      </div>
+    </div>
     <div class="settings">
       <label for="basePath">Download subfolder:</label>
       <input type="text" id="basePath" placeholder="debug-dumps" value="debug-dumps">
@@ -25,6 +35,7 @@
 
     <div class="shortcut-info">
       Dump shortcut: <kbd id="shortcutKey">...</kbd>
+      <br><span class="shortcut-hint">Works only with DevTools open</span>
       <br><span class="shortcut-hint">Change at chrome://extensions/shortcuts</span>
     </div>
 
