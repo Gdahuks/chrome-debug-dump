@@ -71,7 +71,7 @@ function injectConsoleHook() {
 chrome.devtools.panels.create(
   'Debug Dump',
   '',
-  'panel.html',
+  'devtools/panel.html',
   function(panel) {
     var hookInjected = false;
 
