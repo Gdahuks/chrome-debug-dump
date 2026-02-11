@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="panel.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Debug Dump</h1>
+
+    <div class="settings">
+      <label for="basePath">Download subfolder:</label>
+      <input type="text" id="basePath" placeholder="debug-dumps" value="debug-dumps">
+    </div>
+    <div class="settings">
+      <label for="idleTime">Network idle (s):</label>
+      <input type="number" id="idleTime" min="0" max="30" step="0.5" value="2" style="width:60px">
+      <button id="saveSettings" class="btn-small">Save</button>
+    </div>
+
+    <button id="dumpBtn" class="dump-btn">Reload & Dump</button>
+
+    <div id="idleBox" class="idle-box hidden">
+      <div class="idle-header">
+        <span id="idleLabel">Waiting for network idle...</span>
+        <button id="captureNowBtn" class="btn-capture-now">Capture Now</button>
+      </div>
+      <div class="idle-bar-track">
+        <div class="idle-bar-fill" id="idleBarFill"></div>
+      </div>
+    </div>
+
+    <div id="progress" class="progress hidden">
+      <div class="progress-item" data-step="har">HAR</div>
+      <div class="progress-item" data-step="html">HTML</div>
+      <div class="progress-item" data-step="console">Console</div>
+      <div class="progress-item" data-step="meta">Meta</div>
+      <div class="progress-item" data-step="screenshot">Screenshot</div>
+      <div class="progress-item" data-step="download">Saving files</div>
+    </div>
+
+    <div id="status" class="status"></div>
+
+    <div id="result" class="result hidden">
+      <div class="result-label">Saved to:</div>
+      <div class="result-path" id="resultPath"></div>
+      <button id="copyBtn" class="btn-small">Copy Path</button>
+    </div>
+  </div>
+  <script src="panel.js"></script>
+</body>
+</html>

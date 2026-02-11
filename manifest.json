@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Debug Dump",
+  "version": "1.0.0",
+  "description": "One-click dump of full page state (HAR, HTML, console logs) for debugging",
+  "permissions": [
+    "downloads",
+    "clipboardWrite",
+    "storage"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Debug Dump"
+  },
+  "devtools_page": "devtools.html",
+  "background": {
+    "service_worker": "service-worker.js"
+  }
+}

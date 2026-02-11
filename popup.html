@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="panel.css">
+  <style>
+    body { width: 360px; min-height: 100px; }
+    .note { font-size: 11px; color: #777; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Debug Dump</h1>
+    <div class="note">Settings apply to the DevTools panel (F12 → Debug Dump).</div>
+
+    <div class="settings">
+      <label for="basePath">Download subfolder:</label>
+      <input type="text" id="basePath" placeholder="debug-dumps" value="debug-dumps">
+    </div>
+    <div class="settings">
+      <label for="idleTime">Network idle (s):</label>
+      <input type="number" id="idleTime" min="0" max="30" step="0.5" value="2" style="width:60px">
+      <button id="saveSettings" class="btn-small">Save</button>
+    </div>
+
+    <div id="status" class="status"></div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
