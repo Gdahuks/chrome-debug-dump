@@ -16,6 +16,12 @@
     "default_title": "Debug Dump"
   },
   "devtools_page": "devtools/devtools.html",
+  "commands": {
+    "dump": {
+      "suggested_key": { "default": "Alt+Shift+D", "mac": "Alt+Shift+D" },
+      "description": "Dump current page state"
+    }
+  },
   "background": {
     "service_worker": "service-worker.js"
   }

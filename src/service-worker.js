@@ -1,3 +1,9 @@
+chrome.commands.onCommand.addListener(function(command) {
+  if (command === 'dump') {
+    chrome.runtime.sendMessage({ action: 'triggerDump' });
+  }
+});
+
 chrome.runtime.onMessage.addListener(function(message, sender, sendResponse) {
   if (message.action === 'dumpAll') {
     handleDump(message)

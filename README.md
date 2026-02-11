@@ -26,6 +26,8 @@ After the dump completes, the output folder path is automatically copied to your
 
 You can skip the network idle wait at any time by clicking **Capture Now**.
 
+**Keyboard shortcut:** Press `Alt+Shift+D` to trigger a dump without reload (useful when you need to keep focus on the page, e.g. hovering over a tooltip). Customize the shortcut at `chrome://extensions/shortcuts`.
+
 ## Settings
 
 Available both in the DevTools panel and via the extension popup icon (they stay in sync):

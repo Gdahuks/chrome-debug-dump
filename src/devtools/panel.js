@@ -42,6 +42,20 @@
   dumpBtn.addEventListener('click', startDump);
   dumpNoReloadBtn.addEventListener('click', startDumpNoReload);
 
+  // Keyboard shortcut trigger
+  chrome.runtime.onMessage.addListener(function(message) {
+    if (message.action === 'triggerDump' && !dumpBtn.disabled) {
+      startDumpNoReload();
+    }
+  });
+
+  // Display current shortcut
+  var shortcutKeyEl = document.getElementById('shortcutKey');
+  chrome.commands.getAll(function(commands) {
+    var dumpCmd = commands.find(function(c) { return c.name === 'dump'; });
+    shortcutKeyEl.textContent = (dumpCmd && dumpCmd.shortcut) ? dumpCmd.shortcut : 'not set';
+  });
+
   copyBtn.addEventListener('click', function() {
     copyToClipboard(resultPath.textContent).then(function() {
       setStatus('Path copied to clipboard!', 'success');

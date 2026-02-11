@@ -99,6 +99,28 @@ h1 {
   background: #2a2a2a;
 }
 
+.shortcut-info {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #666;
+}
+
+.shortcut-info kbd {
+  display: inline-block;
+  padding: 1px 5px;
+  background: #2d2d2d;
+  border: 1px solid #555;
+  border-radius: 3px;
+  font-family: 'Consolas', 'Courier New', monospace;
+  font-size: 11px;
+  color: #d4d4d4;
+}
+
+.shortcut-hint {
+  font-size: 10px;
+  color: #555;
+}
+
 .btn-small {
   padding: 4px 12px;
   background: #3c3c3c;
