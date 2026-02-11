@@ -54,9 +54,14 @@ h1 {
   border-color: #007acc;
 }
 
+.dump-buttons {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 0;
+}
+
 .dump-btn {
-  display: block;
-  width: 100%;
+  flex: 1;
   padding: 12px 24px;
   background: #0e639c;
   color: #fff;
@@ -80,6 +85,18 @@ h1 {
   background: #3c3c3c;
   color: #666;
   cursor: not-allowed;
+}
+
+.dump-btn-secondary {
+  background: #333;
+}
+
+.dump-btn-secondary:hover {
+  background: #444;
+}
+
+.dump-btn-secondary:active {
+  background: #2a2a2a;
 }
 
 .btn-small {

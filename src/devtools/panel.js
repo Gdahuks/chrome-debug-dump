@@ -5,6 +5,7 @@
   var CAPTURE_DELAY = 200;
 
   var dumpBtn = document.getElementById('dumpBtn');
+  var dumpNoReloadBtn = document.getElementById('dumpNoReloadBtn');
   var statusEl = document.getElementById('status');
   var resultEl = document.getElementById('result');
   var resultPath = document.getElementById('resultPath');
@@ -39,6 +40,7 @@
   });
 
   dumpBtn.addEventListener('click', startDump);
+  dumpNoReloadBtn.addEventListener('click', startDumpNoReload);
 
   copyBtn.addEventListener('click', function() {
     copyToClipboard(resultPath.textContent).then(function() {
@@ -144,8 +146,13 @@
 
   // ---- Main flow ----
 
+  function setButtonsDisabled(disabled) {
+    dumpBtn.disabled = disabled;
+    dumpNoReloadBtn.disabled = disabled;
+  }
+
   function startDump() {
-    dumpBtn.disabled = true;
+    setButtonsDisabled(true);
     resultEl.classList.add('hidden');
     idleBox.classList.add('hidden');
     progressEl.classList.remove('hidden');
@@ -155,21 +162,44 @@
     chrome.devtools.inspectedWindow.reload({});
 
     waitForPageLoad().then(function() {
-      setStatus('Collecting page state...', 'info');
-      // Step 1: Collect data (no scrolling here)
-      return Promise.all([
-        collectHAR(),
-        collectHTML(),
-        collectConsoleLogs(),
-        collectMeta()
-      ]);
-    }).then(function(results) {
+      return performCapture();
+    }).catch(function(err) {
+      setStatus('Error: ' + err.message, 'error');
+      console.error('Dump failed:', err);
+    }).then(function() {
+      setButtonsDisabled(false);
+      idleBox.classList.add('hidden');
+    });
+  }
+
+  function startDumpNoReload() {
+    setButtonsDisabled(true);
+    resultEl.classList.add('hidden');
+    idleBox.classList.add('hidden');
+    progressEl.classList.remove('hidden');
+    resetProgress();
+
+    performCapture().catch(function(err) {
+      setStatus('Error: ' + err.message, 'error');
+      console.error('Dump failed:', err);
+    }).then(function() {
+      setButtonsDisabled(false);
+    });
+  }
+
+  function performCapture() {
+    setStatus('Collecting page state...', 'info');
+    return Promise.all([
+      collectHAR(),
+      collectHTML(),
+      collectConsoleLogs(),
+      collectMeta()
+    ]).then(function(results) {
       var har = results[0];
       var html = results[1];
       var consoleLogs = results[2];
       var meta = results[3];
 
-      // Step 2: Full page screenshot (scrolls the page - must be sequential)
       setStatus('Capturing screenshot...', 'info');
       return captureFullPageScreenshot().then(function(screenshotDataUrl) {
         return {
@@ -204,12 +234,6 @@
       }).catch(function() {
         setStatus('Dump complete! Copy the path manually below.', 'success');
       });
-    }).catch(function(err) {
-      setStatus('Error: ' + err.message, 'error');
-      console.error('Dump failed:', err);
-    }).then(function() {
-      dumpBtn.disabled = false;
-      idleBox.classList.add('hidden');
     });
   }
 

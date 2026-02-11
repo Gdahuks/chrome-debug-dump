@@ -12,7 +12,7 @@ Chrome extension (Manifest v3) for one-click page state capture. Dumps HTML, con
 
 1. Open DevTools (F12) on any page
 2. Go to the **Debug Dump** tab
-3. Click **Reload & Dump**
+3. Click **Reload & Dump** (reloads the page first) or **Dump** (captures current state as-is)
 
 ![DevTools panel ready to dump](docs/panel-idle.png)
 
