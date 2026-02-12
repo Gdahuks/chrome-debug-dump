@@ -1,0 +1,122 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]*.[0-9]*.[0-9]*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 1.2.3 or 1.2.3-beta.1, without v prefix)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$'; then
+            echo "::error::Invalid version: $VERSION (expected semver like 1.2.3 or 1.2.3-beta.1)"
+            exit 1
+          fi
+
+          VERSION_MANIFEST=$(echo "$VERSION" | sed 's/-.*//')
+
+          IS_PRERELEASE=false
+          if echo "$VERSION" | grep -qE -- '-'; then
+            IS_PRERELEASE=true
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "version_manifest=$VERSION_MANIFEST" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+          echo "### Version Info" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Full version:** $VERSION" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Manifest version:** $VERSION_MANIFEST" >> "$GITHUB_STEP_SUMMARY"
+          echo "- **Pre-release:** $IS_PRERELEASE" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Update manifest.json version
+        run: |
+          jq --arg v "${{ steps.version.outputs.version_manifest }}" \
+            '.version = $v' src/manifest.json > src/manifest.json.tmp \
+            && mv src/manifest.json.tmp src/manifest.json
+
+      - name: Create extension zip
+        run: |
+          cd src
+          zip -r "../debug-dump-${{ steps.version.outputs.version }}.zip" .
+
+      - name: Generate INSTALL.txt
+        run: |
+          cat > INSTALL.txt << 'EOF'
+          Debug Dump - Chrome Extension
+          Installation & Update Guide
+          =============================
+
+          FRESH INSTALL
+          -------------
+          1. Download and extract the .zip file from this release
+          2. Open Chrome and navigate to chrome://extensions/
+          3. Enable "Developer mode" (toggle in the top-right corner)
+          4. Click "Load unpacked"
+          5. Select the extracted folder (the one containing manifest.json)
+          6. The extension icon will appear in your toolbar
+
+          UPDATE AN EXISTING INSTALL
+          --------------------------
+          1. Download and extract the new .zip file
+          2. Replace the contents of your existing extension folder
+             with the newly extracted files
+          3. Go to chrome://extensions/
+          4. Find "Debug Dump" and click the refresh icon (circular arrow)
+
+          USAGE
+          -----
+          - Click the extension icon to open settings (base path, idle time,
+            capture toggles)
+          - Open DevTools (F12) and go to the "Debug Dump" tab to capture
+          - Keyboard shortcut: Alt+Shift+D (DevTools must be open)
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: Debug Dump ${{ steps.version.outputs.tag }}
+          generate_release_notes: true
+          prerelease: ${{ steps.version.outputs.is_prerelease == 'true' }}
+          files: |
+            debug-dump-${{ steps.version.outputs.version }}.zip
+            INSTALL.txt
