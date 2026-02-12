@@ -337,6 +337,22 @@ describe('Console Hook - Unhandled Promise Rejections', function() {
     expect(entry.args[0]).toBe('Unhandled promise rejection: null');
   });
 
+  test('includes stackTrace field for rejection with stack', function() {
+    var env = createHookedContext();
+    env.eventListeners.unhandledrejection({
+      reason: { stack: 'Error: fail\n    at x.js:1:1' }
+    });
+    var entry = env.context.window.__debugConsoleLogs[0];
+    expect(entry.stackTrace).toBe('Error: fail\n    at x.js:1:1');
+  });
+
+  test('no stackTrace field for rejection without stack', function() {
+    var env = createHookedContext();
+    env.eventListeners.unhandledrejection({ reason: 'string error' });
+    var entry = env.context.window.__debugConsoleLogs[0];
+    expect(entry.stackTrace).toBeUndefined();
+  });
+
   test('handles unserializable rejection reason', function() {
     var env = createHookedContext();
     var reason = {};
@@ -348,5 +364,46 @@ describe('Console Hook - Unhandled Promise Rejections', function() {
 
     var entry = env.context.window.__debugConsoleLogs[0];
     expect(entry.args[0]).toBe('Unhandled promise rejection: [unserializable reason]');
+  });
+});
+
+// ---- Stack traces & Error.stackTraceLimit ----
+
+describe('Console Hook - Stack Traces', function() {
+  test('sets Error.stackTraceLimit to 50', function() {
+    var ctx = createHookedContext().context;
+    var limit = vm.runInContext('Error.stackTraceLimit', ctx);
+    expect(limit).toBe(50);
+  });
+
+  test('console calls include stackTrace field', function() {
+    var ctx = createHookedContext().context;
+    vm.runInContext('console.log("test")', ctx);
+    var entry = ctx.window.__debugConsoleLogs[0];
+    // stackTrace should be a string (call site stack)
+    expect(typeof entry.stackTrace).toBe('string');
+  });
+
+  test('uncaught exception includes stackTrace field', function() {
+    var env = createHookedContext();
+    env.eventListeners.error({
+      message: 'Uncaught Error',
+      filename: 'app.js',
+      lineno: 1,
+      colno: 1,
+      error: { stack: 'Error: test\n    at app.js:1:1\n    at run (lib.js:5:3)' }
+    });
+    var entry = env.context.window.__debugConsoleLogs[0];
+    expect(entry.stackTrace).toBe('Error: test\n    at app.js:1:1\n    at run (lib.js:5:3)');
+  });
+
+  test('uncaught exception without stack has no stackTrace field', function() {
+    var env = createHookedContext();
+    env.eventListeners.error({
+      message: 'Script error.',
+      error: null
+    });
+    var entry = env.context.window.__debugConsoleLogs[0];
+    expect(entry.stackTrace).toBeUndefined();
   });
 });

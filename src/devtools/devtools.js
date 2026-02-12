@@ -5,13 +5,17 @@ const CONSOLE_HOOK_CODE = `
   window.__debugConsoleHooked = true;
   window.__debugConsoleLogs = [];
   var MAX_ENTRIES = 1000;
+  var ORIG_STACK_LIMIT = Error.stackTraceLimit;
+  Error.stackTraceLimit = 50;
 
-  function pushEntry(level, args) {
-    window.__debugConsoleLogs.push({
+  function pushEntry(level, args, stackTrace) {
+    var entry = {
       level: level,
       timestamp: new Date().toISOString(),
       args: args
-    });
+    };
+    if (stackTrace) entry.stackTrace = stackTrace;
+    window.__debugConsoleLogs.push(entry);
     if (window.__debugConsoleLogs.length > MAX_ENTRIES) {
       window.__debugConsoleLogs.shift();
     }
@@ -40,7 +44,17 @@ const CONSOLE_HOOK_CODE = `
           args.push('[unserializable]');
         }
       }
-      pushEntry(method, args);
+      // Capture call site stack (who called console.error/log/etc.)
+      var callStack = null;
+      try {
+        var e = new Error();
+        if (e.stack) {
+          // Remove first 2 lines: "Error" and the hook's own frame
+          var lines = e.stack.split('\\n');
+          callStack = lines.slice(2).join('\\n');
+        }
+      } catch (ignore) {}
+      pushEntry(method, args, callStack);
       original.apply(console, arguments);
     };
   });
@@ -49,20 +63,23 @@ const CONSOLE_HOOK_CODE = `
   window.addEventListener('error', function(event) {
     var args = [event.message || 'Unknown error'];
     if (event.filename) args.push('at ' + event.filename + ':' + event.lineno + ':' + event.colno);
-    if (event.error && event.error.stack) args.push(event.error.stack);
-    pushEntry('error', args);
+    var stack = (event.error && event.error.stack) ? event.error.stack : null;
+    if (stack) args.push(stack);
+    pushEntry('error', args, stack);
   });
 
   // Capture unhandled promise rejections
   window.addEventListener('unhandledrejection', function(event) {
     var reason = event.reason;
     var msg;
+    var stack = null;
     try {
-      msg = reason && reason.stack ? reason.stack : String(reason);
+      stack = reason && reason.stack ? reason.stack : null;
+      msg = stack || String(reason);
     } catch (e) {
       msg = '[unserializable reason]';
     }
-    pushEntry('error', ['Unhandled promise rejection: ' + msg]);
+    pushEntry('error', ['Unhandled promise rejection: ' + msg], stack);
   });
 })();
 `;
