@@ -6,10 +6,8 @@
   "permissions": [
     "downloads",
     "clipboardWrite",
-    "storage"
-  ],
-  "host_permissions": [
-    "<all_urls>"
+    "storage",
+    "debugger"
   ],
   "action": {
     "default_popup": "popup/popup.html",

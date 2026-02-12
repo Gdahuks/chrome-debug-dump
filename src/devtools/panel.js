@@ -41,7 +41,123 @@
 
   chrome.devtools.network.onNavigated.addListener(function() {
     networkErrors = [];
+    cdpLogs = [];
+    if (cdpAttached) {
+      chrome.debugger.sendCommand({ tabId: inspectedTabId }, 'Runtime.enable');
+      chrome.debugger.sendCommand({ tabId: inspectedTabId }, 'Log.enable');
+    }
   });
+
+  // ---- CDP Console Capture (full async stacks, all execution contexts) ----
+
+  var cdpLogs = [];
+  var MAX_CDP_LOGS = 2000;
+  var cdpAttached = false;
+  var inspectedTabId = chrome.devtools.inspectedWindow.tabId;
+
+  function formatCdpStack(stackTrace) {
+    if (!stackTrace || !stackTrace.callFrames || !stackTrace.callFrames.length) return null;
+    var lines = [];
+    stackTrace.callFrames.forEach(function(f) {
+      var name = f.functionName || '(anonymous)';
+      lines.push(f.url
+        ? '    at ' + name + ' (' + f.url + ':' + (f.lineNumber + 1) + ':' + (f.columnNumber + 1) + ')'
+        : '    at ' + name);
+    });
+    var parent = stackTrace.parent;
+    while (parent) {
+      if (parent.description) lines.push('--- ' + parent.description + ' ---');
+      if (parent.callFrames) {
+        parent.callFrames.forEach(function(f) {
+          var name = f.functionName || '(anonymous)';
+          lines.push(f.url
+            ? '    at ' + name + ' (' + f.url + ':' + (f.lineNumber + 1) + ':' + (f.columnNumber + 1) + ')'
+            : '    at ' + name);
+        });
+      }
+      parent = parent.parent;
+    }
+    return lines.join('\n');
+  }
+
+  function serializeCdpArg(arg) {
+    if (arg.type === 'string') return arg.value;
+    if (arg.type === 'undefined') return 'undefined';
+    if (arg.subtype === 'null') return 'null';
+    if (arg.type === 'number' || arg.type === 'boolean' || arg.type === 'bigint') return String(arg.value);
+    if (arg.type === 'symbol') return arg.description || 'Symbol()';
+    return arg.description || String(arg.value) || '[object]';
+  }
+
+  function pushCdpLog(entry) {
+    cdpLogs.push(entry);
+    if (cdpLogs.length > MAX_CDP_LOGS) cdpLogs.shift();
+  }
+
+  chrome.debugger.onEvent.addListener(function(source, method, params) {
+    if (source.tabId !== inspectedTabId) return;
+
+    if (method === 'Runtime.consoleAPICalled') {
+      var levelMap = { warning: 'warn' };
+      var entry = {
+        level: levelMap[params.type] || params.type,
+        timestamp: new Date(params.timestamp).toISOString(),
+        args: params.args.map(serializeCdpArg)
+      };
+      var stack = formatCdpStack(params.stackTrace);
+      if (stack) entry.stackTrace = stack;
+      pushCdpLog(entry);
+    }
+
+    if (method === 'Runtime.exceptionThrown') {
+      var ex = params.exceptionDetails;
+      var msg = ex.text || 'Unknown error';
+      if (ex.exception && ex.exception.description) {
+        msg = ex.exception.description.split('\n')[0];
+      }
+      var entry = {
+        level: 'error',
+        timestamp: new Date(params.timestamp).toISOString(),
+        args: [msg]
+      };
+      var stack = formatCdpStack(ex.stackTrace);
+      if (stack) entry.stackTrace = stack;
+      pushCdpLog(entry);
+    }
+
+    if (method === 'Log.entryAdded') {
+      var e = params.entry;
+      var logLevelMap = { warning: 'warn', verbose: 'debug' };
+      var entry = {
+        level: logLevelMap[e.level] || e.level,
+        timestamp: new Date(e.timestamp).toISOString(),
+        args: [e.text],
+        source: e.source
+      };
+      if (e.url) entry.args.push('(' + e.url + (e.lineNumber !== undefined ? ':' + e.lineNumber : '') + ')');
+      var stack = formatCdpStack(e.stackTrace);
+      if (stack) entry.stackTrace = stack;
+      pushCdpLog(entry);
+    }
+  });
+
+  chrome.debugger.onDetach.addListener(function(source) {
+    if (source.tabId === inspectedTabId) cdpAttached = false;
+  });
+
+  function attachCdpCapture() {
+    chrome.debugger.attach({ tabId: inspectedTabId }, '1.3', function() {
+      if (chrome.runtime.lastError) {
+        console.warn('CDP attach failed:', chrome.runtime.lastError.message);
+        return;
+      }
+      cdpAttached = true;
+      chrome.debugger.sendCommand({ tabId: inspectedTabId }, 'Runtime.enable');
+      chrome.debugger.sendCommand({ tabId: inspectedTabId }, 'Log.enable');
+    });
+  }
+
+  attachCdpCapture();
 
   // Load saved settings
   chrome.storage.local.get(['basePath', 'idleTime', 'dumpToggles'], function(result) {
@@ -530,17 +646,17 @@
     });
   }
 
-  // Separate from sendMsg - doesn't reject on captureVisibleTab errors
   function captureViewport() {
     return new Promise(function(resolve) {
-      chrome.runtime.sendMessage({ action: 'captureViewport', tabId: chrome.devtools.inspectedWindow.tabId }, function(response) {
-        if (chrome.runtime.lastError) {
-          console.warn('captureViewport error:', chrome.runtime.lastError.message);
-          resolve(null);
-        } else {
-          resolve(response && response.dataUrl ? response.dataUrl : null);
+      if (!cdpAttached) { resolve(null); return; }
+      chrome.debugger.sendCommand(
+        { tabId: inspectedTabId }, 'Page.captureScreenshot',
+        { format: 'jpeg', quality: 85 },
+        function(result) {
+          if (chrome.runtime.lastError || !result) { resolve(null); return; }
+          resolve('data:image/jpeg;base64,' + result.data);
         }
-      });
+      );
     });
   }
 
@@ -625,6 +741,18 @@
 
   function collectConsoleLogs() {
     updateProgress('console', 'active');
+
+    if (cdpAttached) {
+      // CDP provides full console data: async stacks, all execution contexts
+      var allLogs = cdpLogs.slice().concat(networkErrors);
+      allLogs.sort(function(a, b) {
+        return new Date(a.timestamp) - new Date(b.timestamp);
+      });
+      updateProgress('console', 'done');
+      return Promise.resolve(allLogs);
+    }
+
+    // Fallback: injected console hook + network errors
     return new Promise(function(resolve) {
       chrome.devtools.inspectedWindow.eval(
         'JSON.stringify(window.__debugConsoleLogs||[])',
