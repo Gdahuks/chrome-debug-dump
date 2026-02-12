@@ -25,9 +25,17 @@ const CONSOLE_HOOK_CODE = `
       var args = [];
       for (var i = 0; i < arguments.length; i++) {
         try {
-          args.push(typeof arguments[i] === 'object'
-            ? JSON.stringify(arguments[i])
-            : String(arguments[i]));
+          if (arguments[i] instanceof Error) {
+            args.push(JSON.stringify({
+              name: arguments[i].name,
+              message: arguments[i].message,
+              stack: arguments[i].stack
+            }));
+          } else if (typeof arguments[i] === 'object') {
+            args.push(JSON.stringify(arguments[i]));
+          } else {
+            args.push(String(arguments[i]));
+          }
         } catch (e) {
           args.push('[unserializable]');
         }
