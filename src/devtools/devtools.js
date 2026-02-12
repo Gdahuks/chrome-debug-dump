@@ -25,7 +25,7 @@ const CONSOLE_HOOK_CODE = `
       var args = [];
       for (var i = 0; i < arguments.length; i++) {
         try {
-          if (arguments[i] instanceof Error) {
+          if (arguments[i] instanceof Error || (arguments[i] && arguments[i].stack && arguments[i].message)) {
             args.push(JSON.stringify({
               name: arguments[i].name,
               message: arguments[i].message,

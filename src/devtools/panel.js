@@ -119,19 +119,27 @@
 
   function copyToClipboard(text) {
     // Primary: execCommand in panel (works with clipboardWrite permission, panel is focused)
-    var ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.select();
-    var ok = document.execCommand('copy');
-    document.body.removeChild(ta);
-    if (ok) return Promise.resolve();
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      var ok;
+      try {
+        ta.select();
+        ok = document.execCommand('copy');
+      } finally {
+        document.body.removeChild(ta);
+      }
+      if (ok) return Promise.resolve();
+    } catch (e) {
+      // execCommand path failed, fall through to evalInPage
+    }
 
     // Fallback: clipboard API via inspected page (catch in page context to avoid uncaught rejection)
-    var escaped = text.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    return evalInPage("navigator.clipboard.writeText('" + escaped + "').then(function(){return true}).catch(function(){return false})").then(function(result) {
+    var safe = JSON.stringify(text);
+    return evalInPage("navigator.clipboard.writeText(" + safe + ").then(function(){return true}).catch(function(){return false})").then(function(result) {
       if (!result) throw new Error('copy failed');
     });
   }
@@ -629,7 +637,7 @@
           allLogs.sort(function(a, b) {
             return new Date(a.timestamp) - new Date(b.timestamp);
           });
-          updateProgress('console', allLogs.length > 0 ? 'done' : (ex ? 'error' : 'done'));
+          updateProgress('console', ex ? 'error' : 'done');
           resolve(allLogs);
         }
       );

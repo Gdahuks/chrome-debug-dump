@@ -7,7 +7,7 @@ const devtoolsSrc = fs.readFileSync(
   path.join(__dirname, '..', 'src', 'devtools', 'devtools.js'),
   'utf8'
 );
-const match = devtoolsSrc.match(/const CONSOLE_HOOK_CODE = `([\s\S]*?)`;/);
+const match = devtoolsSrc.match(/(?:const|let|var)\s+CONSOLE_HOOK_CODE\s*=\s*`([\s\S]*?)`;?/);
 if (!match) throw new Error('Could not extract CONSOLE_HOOK_CODE from devtools.js');
 const HOOK_CODE = match[1];
 
@@ -190,6 +190,20 @@ describe('Console Hook - Serialization', function() {
     var captured = JSON.parse(ctx.window.__debugConsoleLogs[0].args[0]);
     expect(captured.name).toBe('RangeError');
     expect(captured.message).toBe('out of range');
+  });
+
+  test('serializes cross-realm error-like objects (duck-typing)', function() {
+    var ctx = createHookedContext().context;
+    // Simulate an error from an iframe — not instanceof Error but has stack+message
+    vm.runInContext(
+      'var fake = { name: "SecurityError", message: "cross-origin", stack: "SecurityError: cross-origin\\n    at iframe.js:1:1" }; console.error(fake);',
+      ctx
+    );
+
+    var captured = JSON.parse(ctx.window.__debugConsoleLogs[0].args[0]);
+    expect(captured.name).toBe('SecurityError');
+    expect(captured.message).toBe('cross-origin');
+    expect(captured.stack).toContain('SecurityError');
   });
 
   test('handles circular references as [unserializable]', function() {
