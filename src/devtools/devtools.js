@@ -92,26 +92,13 @@ function injectConsoleHook() {
   });
 }
 
+// Inject hook immediately when DevTools opens (don't wait for panel tab click)
+injectConsoleHook();
+
+// Re-inject hook after page navigation (page world is reset)
+chrome.devtools.network.onNavigated.addListener(function() {
+  injectConsoleHook();
+});
+
 // Create the DevTools panel
-chrome.devtools.panels.create(
-  'Debug Dump',
-  '',
-  'devtools/panel.html',
-  function(panel) {
-    var hookInjected = false;
-
-    panel.onShown.addListener(function() {
-      if (!hookInjected) {
-        hookInjected = true;
-        injectConsoleHook();
-      }
-    });
-
-    // Re-inject hook after page navigation (page world is reset)
-    chrome.devtools.network.onNavigated.addListener(function() {
-      hookInjected = false;
-      injectConsoleHook();
-      hookInjected = true;
-    });
-  }
-);
+chrome.devtools.panels.create('Debug Dump', '', 'devtools/panel.html');
