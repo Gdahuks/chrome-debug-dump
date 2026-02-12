@@ -118,21 +118,21 @@
   // ---- Helpers ----
 
   function copyToClipboard(text) {
-    // DevTools panels block the Clipboard API — use the inspected page instead
+    // Primary: execCommand in panel (works with clipboardWrite permission, panel is focused)
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    var ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    if (ok) return Promise.resolve();
+
+    // Fallback: clipboard API via inspected page (catch in page context to avoid uncaught rejection)
     var escaped = text.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    return evalInPage("navigator.clipboard.writeText('" + escaped + "').then(function(){return true})").then(function(ok) {
-      if (!ok) throw new Error('copy failed');
-    }).catch(function() {
-      // Fallback: execCommand in panel
-      var ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      var ok = document.execCommand('copy');
-      document.body.removeChild(ta);
-      if (!ok) throw new Error('copy failed');
+    return evalInPage("navigator.clipboard.writeText('" + escaped + "').then(function(){return true}).catch(function(){return false})").then(function(result) {
+      if (!result) throw new Error('copy failed');
     });
   }
 
