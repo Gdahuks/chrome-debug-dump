@@ -23,6 +23,26 @@
 
   var dumpToggles = Object.assign({}, DEFAULT_TOGGLES);
 
+  // Track network errors (browser-generated, not captured by JS console hook)
+  var networkErrors = [];
+  var MAX_NETWORK_ERRORS = 1000;
+
+  chrome.devtools.network.onRequestFinished.addListener(function(entry) {
+    var status = entry.response.status;
+    if (status >= 400) {
+      networkErrors.push({
+        level: 'error',
+        timestamp: entry.startedDateTime,
+        args: [entry.request.method + ' ' + entry.request.url + ' ' + status + ' (' + entry.response.statusText + ')']
+      });
+      if (networkErrors.length > MAX_NETWORK_ERRORS) networkErrors.shift();
+    }
+  });
+
+  chrome.devtools.network.onNavigated.addListener(function() {
+    networkErrors = [];
+  });
+
   // Load saved settings
   chrome.storage.local.get(['basePath', 'idleTime', 'dumpToggles'], function(result) {
     if (result.basePath) basePathInput.value = result.basePath;
@@ -601,11 +621,16 @@
       chrome.devtools.inspectedWindow.eval(
         'JSON.stringify(window.__debugConsoleLogs||[])',
         function(result, ex) {
-          if (ex) { updateProgress('console', 'error'); resolve([]); }
-          else {
-            updateProgress('console', 'done');
-            try { resolve(JSON.parse(result)); } catch (e) { resolve([]); }
+          var jsLogs = [];
+          if (!ex) {
+            try { jsLogs = JSON.parse(result); } catch (e) {}
           }
+          var allLogs = jsLogs.concat(networkErrors);
+          allLogs.sort(function(a, b) {
+            return new Date(a.timestamp) - new Date(b.timestamp);
+          });
+          updateProgress('console', allLogs.length > 0 ? 'done' : (ex ? 'error' : 'done'));
+          resolve(allLogs);
         }
       );
     });
