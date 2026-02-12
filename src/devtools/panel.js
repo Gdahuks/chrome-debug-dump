@@ -77,7 +77,7 @@
     }
   }
 
-  // Sync settings changed via popup + keyboard shortcut trigger
+  // Sync settings changed via popup
   chrome.storage.onChanged.addListener(function(changes) {
     if (changes.basePath) basePathInput.value = changes.basePath.newValue;
     if (changes.idleTime) idleTimeInput.value = changes.idleTime.newValue;
@@ -85,20 +85,15 @@
       dumpToggles = Object.assign({}, DEFAULT_TOGGLES, changes.dumpToggles.newValue);
       applyToggleUI();
     }
-    if (changes.triggerDump && !dumpBtn.disabled) {
-      startDumpNoReload();
-    }
   });
 
   dumpBtn.addEventListener('click', startDump);
   dumpNoReloadBtn.addEventListener('click', startDumpNoReload);
 
-  // Keyboard shortcut trigger
-  chrome.runtime.onMessage.addListener(function(message) {
-    if (message.action === 'triggerDump' && !dumpBtn.disabled) {
-      startDumpNoReload();
-    }
-  });
+  // Expose for devtools.js to call on keyboard shortcut (works from any DevTools tab)
+  window.triggerDumpFromShortcut = function() {
+    if (!dumpBtn.disabled) startDumpNoReload();
+  };
 
   // Display current shortcut
   var shortcutKeyEl = document.getElementById('shortcutKey');

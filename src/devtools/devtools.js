@@ -100,5 +100,32 @@ chrome.devtools.network.onNavigated.addListener(function() {
   injectConsoleHook();
 });
 
+// Track panel window for keyboard shortcut relay
+var panelWindow = null;
+var pendingDump = false;
+
 // Create the DevTools panel
-chrome.devtools.panels.create('Debug Dump', '', 'devtools/panel.html');
+chrome.devtools.panels.create('Debug Dump', '', 'devtools/panel.html', function(panel) {
+  panel.onShown.addListener(function(win) {
+    panelWindow = win;
+    if (pendingDump) {
+      pendingDump = false;
+      // Short delay to ensure panel.js is fully initialized on first show
+      setTimeout(function() {
+        if (panelWindow && typeof panelWindow.triggerDumpFromShortcut === 'function') {
+          panelWindow.triggerDumpFromShortcut();
+        }
+      }, 100);
+    }
+  });
+});
+
+// Listen for keyboard shortcut trigger (works even before panel tab is clicked)
+chrome.storage.onChanged.addListener(function(changes) {
+  if (!changes.triggerDump) return;
+  if (panelWindow && typeof panelWindow.triggerDumpFromShortcut === 'function') {
+    panelWindow.triggerDumpFromShortcut();
+  } else {
+    pendingDump = true;
+  }
+});
