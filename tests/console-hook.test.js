@@ -378,7 +378,9 @@ describe('Console Hook - Stack Traces', function() {
 
   test('console calls include stackTrace field', function() {
     var ctx = createHookedContext().context;
-    vm.runInContext('console.log("test")', ctx);
+    // Wrap in a named function so the stack has enough frames after
+    // slicing the first two lines ("Error" + hook's own frame)
+    vm.runInContext('(function caller() { console.log("test"); })()', ctx);
     var entry = ctx.window.__debugConsoleLogs[0];
     // stackTrace should be a string (call site stack)
     expect(typeof entry.stackTrace).toBe('string');
