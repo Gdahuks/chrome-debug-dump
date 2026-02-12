@@ -9,7 +9,11 @@ const devtoolsSrc = fs.readFileSync(
 );
 const match = devtoolsSrc.match(/(?:const|let|var)\s+CONSOLE_HOOK_CODE\s*=\s*`([\s\S]*?)`;?/);
 if (!match) throw new Error('Could not extract CONSOLE_HOOK_CODE from devtools.js');
-const HOOK_CODE = match[1];
+// The regex extracts raw source text from a template literal. Template literals
+// process escape sequences (e.g. \\n → \n) but fs.readFileSync preserves the raw
+// bytes. Replicate that single level of escape processing so vm.runInContext
+// compiles the same code that eval() would receive at runtime.
+const HOOK_CODE = match[1].replace(/\\\\/g, '\\');
 
 /**
  * Creates an isolated VM context with mocked window/console,
