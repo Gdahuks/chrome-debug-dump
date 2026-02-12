@@ -5,13 +5,17 @@ const CONSOLE_HOOK_CODE = `
   window.__debugConsoleHooked = true;
   window.__debugConsoleLogs = [];
   var MAX_ENTRIES = 1000;
+  var ORIG_STACK_LIMIT = Error.stackTraceLimit;
+  Error.stackTraceLimit = 50;
 
-  function pushEntry(level, args) {
-    window.__debugConsoleLogs.push({
+  function pushEntry(level, args, stackTrace) {
+    var entry = {
       level: level,
       timestamp: new Date().toISOString(),
       args: args
-    });
+    };
+    if (stackTrace) entry.stackTrace = stackTrace;
+    window.__debugConsoleLogs.push(entry);
     if (window.__debugConsoleLogs.length > MAX_ENTRIES) {
       window.__debugConsoleLogs.shift();
     }
@@ -25,14 +29,32 @@ const CONSOLE_HOOK_CODE = `
       var args = [];
       for (var i = 0; i < arguments.length; i++) {
         try {
-          args.push(typeof arguments[i] === 'object'
-            ? JSON.stringify(arguments[i])
-            : String(arguments[i]));
+          if (arguments[i] instanceof Error || (arguments[i] && arguments[i].stack && arguments[i].message)) {
+            args.push(JSON.stringify({
+              name: arguments[i].name,
+              message: arguments[i].message,
+              stack: arguments[i].stack
+            }));
+          } else if (typeof arguments[i] === 'object') {
+            args.push(JSON.stringify(arguments[i]));
+          } else {
+            args.push(String(arguments[i]));
+          }
         } catch (e) {
           args.push('[unserializable]');
         }
       }
-      pushEntry(method, args);
+      // Capture call site stack (who called console.error/log/etc.)
+      var callStack = null;
+      try {
+        var e = new Error();
+        if (e.stack) {
+          // Remove first 2 lines: "Error" and the hook's own frame
+          var lines = e.stack.split('\\n');
+          callStack = lines.slice(2).join('\\n');
+        }
+      } catch (ignore) {}
+      pushEntry(method, args, callStack);
       original.apply(console, arguments);
     };
   });
@@ -41,20 +63,23 @@ const CONSOLE_HOOK_CODE = `
   window.addEventListener('error', function(event) {
     var args = [event.message || 'Unknown error'];
     if (event.filename) args.push('at ' + event.filename + ':' + event.lineno + ':' + event.colno);
-    if (event.error && event.error.stack) args.push(event.error.stack);
-    pushEntry('error', args);
+    var stack = (event.error && event.error.stack) ? event.error.stack : null;
+    if (stack) args.push(stack);
+    pushEntry('error', args, stack);
   });
 
   // Capture unhandled promise rejections
   window.addEventListener('unhandledrejection', function(event) {
     var reason = event.reason;
     var msg;
+    var stack = null;
     try {
-      msg = reason && reason.stack ? reason.stack : String(reason);
+      stack = reason && reason.stack ? reason.stack : null;
+      msg = stack || String(reason);
     } catch (e) {
       msg = '[unserializable reason]';
     }
-    pushEntry('error', ['Unhandled promise rejection: ' + msg]);
+    pushEntry('error', ['Unhandled promise rejection: ' + msg], stack);
   });
 })();
 `;
@@ -67,26 +92,40 @@ function injectConsoleHook() {
   });
 }
 
+// Inject hook immediately when DevTools opens (don't wait for panel tab click)
+injectConsoleHook();
+
+// Re-inject hook after page navigation (page world is reset)
+chrome.devtools.network.onNavigated.addListener(function() {
+  injectConsoleHook();
+});
+
+// Track panel window for keyboard shortcut relay
+var panelWindow = null;
+var pendingDump = false;
+
 // Create the DevTools panel
-chrome.devtools.panels.create(
-  'Debug Dump',
-  '',
-  'devtools/panel.html',
-  function(panel) {
-    var hookInjected = false;
+chrome.devtools.panels.create('Debug Dump', '', 'devtools/panel.html', function(panel) {
+  panel.onShown.addListener(function(win) {
+    panelWindow = win;
+    if (pendingDump) {
+      pendingDump = false;
+      // Short delay to ensure panel.js is fully initialized on first show
+      setTimeout(function() {
+        if (panelWindow && typeof panelWindow.triggerDumpFromShortcut === 'function') {
+          panelWindow.triggerDumpFromShortcut();
+        }
+      }, 100);
+    }
+  });
+});
 
-    panel.onShown.addListener(function() {
-      if (!hookInjected) {
-        hookInjected = true;
-        injectConsoleHook();
-      }
-    });
-
-    // Re-inject hook after page navigation (page world is reset)
-    chrome.devtools.network.onNavigated.addListener(function() {
-      hookInjected = false;
-      injectConsoleHook();
-      hookInjected = true;
-    });
+// Listen for keyboard shortcut trigger (works even before panel tab is clicked)
+chrome.storage.onChanged.addListener(function(changes) {
+  if (!changes.triggerDump) return;
+  if (panelWindow && typeof panelWindow.triggerDumpFromShortcut === 'function') {
+    panelWindow.triggerDumpFromShortcut();
+  } else {
+    pendingDump = true;
   }
-);
+});

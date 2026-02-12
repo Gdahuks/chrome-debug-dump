@@ -23,6 +23,26 @@
 
   var dumpToggles = Object.assign({}, DEFAULT_TOGGLES);
 
+  // Track network errors (browser-generated, not captured by JS console hook)
+  var networkErrors = [];
+  var MAX_NETWORK_ERRORS = 1000;
+
+  chrome.devtools.network.onRequestFinished.addListener(function(entry) {
+    var status = entry.response.status;
+    if (status >= 400) {
+      networkErrors.push({
+        level: 'error',
+        timestamp: entry.startedDateTime,
+        args: [entry.request.method + ' ' + entry.request.url + ' ' + status + ' (' + entry.response.statusText + ')']
+      });
+      if (networkErrors.length > MAX_NETWORK_ERRORS) networkErrors.shift();
+    }
+  });
+
+  chrome.devtools.network.onNavigated.addListener(function() {
+    networkErrors = [];
+  });
+
   // Load saved settings
   chrome.storage.local.get(['basePath', 'idleTime', 'dumpToggles'], function(result) {
     if (result.basePath) basePathInput.value = result.basePath;
@@ -57,7 +77,7 @@
     }
   }
 
-  // Sync settings changed via popup + keyboard shortcut trigger
+  // Sync settings changed via popup
   chrome.storage.onChanged.addListener(function(changes) {
     if (changes.basePath) basePathInput.value = changes.basePath.newValue;
     if (changes.idleTime) idleTimeInput.value = changes.idleTime.newValue;
@@ -65,20 +85,15 @@
       dumpToggles = Object.assign({}, DEFAULT_TOGGLES, changes.dumpToggles.newValue);
       applyToggleUI();
     }
-    if (changes.triggerDump && !dumpBtn.disabled) {
-      startDumpNoReload();
-    }
   });
 
   dumpBtn.addEventListener('click', startDump);
   dumpNoReloadBtn.addEventListener('click', startDumpNoReload);
 
-  // Keyboard shortcut trigger
-  chrome.runtime.onMessage.addListener(function(message) {
-    if (message.action === 'triggerDump' && !dumpBtn.disabled) {
-      startDumpNoReload();
-    }
-  });
+  // Expose for devtools.js to call on keyboard shortcut (works from any DevTools tab)
+  window.triggerDumpFromShortcut = function() {
+    if (!dumpBtn.disabled) startDumpNoReload();
+  };
 
   // Display current shortcut
   var shortcutKeyEl = document.getElementById('shortcutKey');
@@ -98,21 +113,29 @@
   // ---- Helpers ----
 
   function copyToClipboard(text) {
-    // DevTools panels block the Clipboard API — use the inspected page instead
-    var escaped = text.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-    return evalInPage("navigator.clipboard.writeText('" + escaped + "').then(function(){return true})").then(function(ok) {
-      if (!ok) throw new Error('copy failed');
-    }).catch(function() {
-      // Fallback: execCommand in panel
+    // Primary: execCommand in panel (works with clipboardWrite permission, panel is focused)
+    try {
       var ta = document.createElement('textarea');
       ta.value = text;
       ta.style.position = 'fixed';
       ta.style.opacity = '0';
       document.body.appendChild(ta);
-      ta.select();
-      var ok = document.execCommand('copy');
-      document.body.removeChild(ta);
-      if (!ok) throw new Error('copy failed');
+      var ok;
+      try {
+        ta.select();
+        ok = document.execCommand('copy');
+      } finally {
+        document.body.removeChild(ta);
+      }
+      if (ok) return Promise.resolve();
+    } catch (e) {
+      // execCommand path failed, fall through to evalInPage
+    }
+
+    // Fallback: clipboard API via inspected page (catch in page context to avoid uncaught rejection)
+    var safe = JSON.stringify(text);
+    return evalInPage("navigator.clipboard.writeText(" + safe + ").then(function(){return true}).catch(function(){return false})").then(function(result) {
+      if (!result) throw new Error('copy failed');
     });
   }
 
@@ -601,11 +624,16 @@
       chrome.devtools.inspectedWindow.eval(
         'JSON.stringify(window.__debugConsoleLogs||[])',
         function(result, ex) {
-          if (ex) { updateProgress('console', 'error'); resolve([]); }
-          else {
-            updateProgress('console', 'done');
-            try { resolve(JSON.parse(result)); } catch (e) { resolve([]); }
+          var jsLogs = [];
+          if (!ex) {
+            try { jsLogs = JSON.parse(result); } catch (e) {}
           }
+          var allLogs = jsLogs.concat(networkErrors);
+          allLogs.sort(function(a, b) {
+            return new Date(a.timestamp) - new Date(b.timestamp);
+          });
+          updateProgress('console', ex ? 'error' : 'done');
+          resolve(allLogs);
         }
       );
     });
