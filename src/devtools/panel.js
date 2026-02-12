@@ -45,6 +45,8 @@
     if (cdpAttached) {
       chrome.debugger.sendCommand({ tabId: inspectedTabId }, 'Runtime.enable');
       chrome.debugger.sendCommand({ tabId: inspectedTabId }, 'Log.enable');
+      chrome.debugger.sendCommand({ tabId: inspectedTabId }, 'Debugger.enable');
+      chrome.debugger.sendCommand({ tabId: inspectedTabId }, 'Debugger.setAsyncCallStackDepth', { maxDepth: 32 });
     }
   });
 
@@ -154,6 +156,8 @@
       cdpAttached = true;
       chrome.debugger.sendCommand({ tabId: inspectedTabId }, 'Runtime.enable');
       chrome.debugger.sendCommand({ tabId: inspectedTabId }, 'Log.enable');
+      chrome.debugger.sendCommand({ tabId: inspectedTabId }, 'Debugger.enable');
+      chrome.debugger.sendCommand({ tabId: inspectedTabId }, 'Debugger.setAsyncCallStackDepth', { maxDepth: 32 });
     });
   }
 
