@@ -154,7 +154,7 @@
       chrome.permissions.contains({ permissions: ['clipboardWrite'] }, resolve);
     }).then(function(hasClipPerm) {
       if (hasClipPerm) return true;
-      // Request permission (works because we're in a user gesture chain)
+      // Request permission (only succeeds when called from a user gesture, e.g. copy button click)
       return new Promise(function(resolve) {
         chrome.permissions.request({ permissions: ['clipboardWrite'] }, resolve);
       });
