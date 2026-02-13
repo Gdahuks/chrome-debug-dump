@@ -110,7 +110,10 @@
       var newToggles = Object.assign({}, DEFAULT_TOGGLES, changes.dumpToggles.newValue);
       if (newToggles.screenshot && !dumpToggles.screenshot) {
         hasScreenshotPermission().then(function(granted) {
-          if (!granted) newToggles.screenshot = false;
+          if (!granted) {
+            newToggles.screenshot = false;
+            chrome.storage.local.set({ dumpToggles: newToggles });
+          }
           dumpToggles = newToggles;
           applyToggleUI();
         });
