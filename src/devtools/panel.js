@@ -3,7 +3,7 @@
 
   var MAX_SCREENSHOT_HEIGHT = 16384;
   var CAPTURE_DELAY = 200;
-  var DEFAULT_TOGGLES = { har: true, html: true, console: true, meta: true, screenshot: true };
+  var DEFAULT_TOGGLES = { har: true, html: true, console: true, meta: true, screenshot: false };
 
   var dumpBtn = document.getElementById('dumpBtn');
   var dumpNoReloadBtn = document.getElementById('dumpNoReloadBtn');
@@ -48,7 +48,18 @@
     if (result.basePath) basePathInput.value = result.basePath;
     if (result.idleTime !== undefined) idleTimeInput.value = result.idleTime;
     if (result.dumpToggles) dumpToggles = Object.assign({}, DEFAULT_TOGGLES, result.dumpToggles);
-    applyToggleUI();
+
+    if (dumpToggles.screenshot) {
+      hasScreenshotPermission().then(function(granted) {
+        if (!granted) {
+          dumpToggles.screenshot = false;
+          chrome.storage.local.set({ dumpToggles: dumpToggles });
+        }
+        applyToggleUI();
+      });
+    } else {
+      applyToggleUI();
+    }
   });
 
   saveSettingsBtn.addEventListener('click', function() {
@@ -64,6 +75,20 @@
     var btn = e.target.closest('.toggle-chip');
     if (!btn) return;
     var key = btn.getAttribute('data-key');
+
+    if (key === 'screenshot' && !dumpToggles[key]) {
+      requestScreenshotPermission().then(function(granted) {
+        if (granted) {
+          dumpToggles[key] = true;
+          applyToggleUI();
+          chrome.storage.local.set({ dumpToggles: dumpToggles });
+        } else {
+          setStatus('Screenshot requires page access permission.', 'error');
+        }
+      });
+      return;
+    }
+
     dumpToggles[key] = !dumpToggles[key];
     applyToggleUI();
     chrome.storage.local.set({ dumpToggles: dumpToggles });
@@ -82,8 +107,20 @@
     if (changes.basePath) basePathInput.value = changes.basePath.newValue;
     if (changes.idleTime) idleTimeInput.value = changes.idleTime.newValue;
     if (changes.dumpToggles) {
-      dumpToggles = Object.assign({}, DEFAULT_TOGGLES, changes.dumpToggles.newValue);
-      applyToggleUI();
+      var newToggles = Object.assign({}, DEFAULT_TOGGLES, changes.dumpToggles.newValue);
+      if (newToggles.screenshot && !dumpToggles.screenshot) {
+        hasScreenshotPermission().then(function(granted) {
+          if (!granted) {
+            newToggles.screenshot = false;
+            chrome.storage.local.set({ dumpToggles: newToggles });
+          }
+          dumpToggles = newToggles;
+          applyToggleUI();
+        });
+      } else {
+        dumpToggles = newToggles;
+        applyToggleUI();
+      }
     }
   });
 
@@ -113,29 +150,27 @@
   // ---- Helpers ----
 
   function copyToClipboard(text) {
-    // Primary: execCommand in panel (works with clipboardWrite permission, panel is focused)
-    try {
+    return new Promise(function(resolve) {
+      chrome.permissions.contains({ permissions: ['clipboardWrite'] }, resolve);
+    }).then(function(hasClipPerm) {
+      if (hasClipPerm) return true;
+      // Request permission (only succeeds when called from a user gesture, e.g. copy button click)
+      return new Promise(function(resolve) {
+        chrome.permissions.request({ permissions: ['clipboardWrite'] }, resolve);
+      });
+    }).then(function(hasClipPerm) {
+      if (!hasClipPerm) throw new Error('Clipboard permission denied');
       var ta = document.createElement('textarea');
       ta.value = text;
       ta.style.position = 'fixed';
       ta.style.opacity = '0';
       document.body.appendChild(ta);
-      var ok;
       try {
         ta.select();
-        ok = document.execCommand('copy');
+        if (!document.execCommand('copy')) throw new Error('execCommand failed');
       } finally {
         document.body.removeChild(ta);
       }
-      if (ok) return Promise.resolve();
-    } catch (e) {
-      // execCommand path failed, fall through to evalInPage
-    }
-
-    // Fallback: clipboard API via inspected page (catch in page context to avoid uncaught rejection)
-    var safe = JSON.stringify(text);
-    return evalInPage("navigator.clipboard.writeText(" + safe + ").then(function(){return true}).catch(function(){return false})").then(function(result) {
-      if (!result) throw new Error('copy failed');
     });
   }
 
@@ -160,6 +195,18 @@
         if (ex) reject(new Error('eval failed'));
         else resolve(result);
       });
+    });
+  }
+
+  function hasScreenshotPermission() {
+    return new Promise(function(resolve) {
+      chrome.permissions.contains({ origins: ['<all_urls>'] }, resolve);
+    });
+  }
+
+  function requestScreenshotPermission() {
+    return new Promise(function(resolve) {
+      chrome.permissions.request({ origins: ['<all_urls>'] }, resolve);
     });
   }
 
@@ -329,8 +376,18 @@
 
       var screenshotPromise;
       if (dumpToggles.screenshot) {
-        setStatus('Capturing screenshot...', 'info');
-        screenshotPromise = captureFullPageScreenshot();
+        screenshotPromise = hasScreenshotPermission().then(function(granted) {
+          if (!granted) {
+            updateProgress('screenshot', 'error');
+            setStatus('Screenshot permission revoked - skipping.', 'error');
+            dumpToggles.screenshot = false;
+            applyToggleUI();
+            chrome.storage.local.set({ dumpToggles: dumpToggles });
+            return null;
+          }
+          setStatus('Capturing screenshot...', 'info');
+          return captureFullPageScreenshot();
+        });
       } else {
         screenshotPromise = Promise.resolve(null);
       }

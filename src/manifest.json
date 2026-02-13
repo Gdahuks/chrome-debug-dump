@@ -5,10 +5,12 @@
   "description": "One-click dump of full page state (HAR, HTML, console logs) for debugging",
   "permissions": [
     "downloads",
-    "clipboardWrite",
     "storage"
   ],
-  "host_permissions": [
+  "optional_permissions": [
+    "clipboardWrite"
+  ],
+  "optional_host_permissions": [
     "<all_urls>"
   ],
   "action": {

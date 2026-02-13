@@ -1,7 +1,7 @@
 (function() {
   'use strict';
 
-  var DEFAULT_TOGGLES = { har: true, html: true, console: true, meta: true, screenshot: true };
+  var DEFAULT_TOGGLES = { har: true, html: true, console: true, meta: true, screenshot: false };
 
   var statusEl = document.getElementById('status');
   var shortcutKeyEl = document.getElementById('shortcutKey');
@@ -16,7 +16,18 @@
     if (r.basePath) basePathInput.value = r.basePath;
     if (r.idleTime !== undefined) idleTimeInput.value = r.idleTime;
     if (r.dumpToggles) dumpToggles = Object.assign({}, DEFAULT_TOGGLES, r.dumpToggles);
-    applyToggleUI();
+
+    if (dumpToggles.screenshot) {
+      hasScreenshotPermission().then(function(granted) {
+        if (!granted) {
+          dumpToggles.screenshot = false;
+          chrome.storage.local.set({ dumpToggles: dumpToggles });
+        }
+        applyToggleUI();
+      });
+    } else {
+      applyToggleUI();
+    }
   });
 
   chrome.commands.getAll(function(commands) {
@@ -24,11 +35,38 @@
     shortcutKeyEl.textContent = (dumpCmd && dumpCmd.shortcut) ? dumpCmd.shortcut : 'not set';
   });
 
+  function hasScreenshotPermission() {
+    return new Promise(function(resolve) {
+      chrome.permissions.contains({ origins: ['<all_urls>'] }, resolve);
+    });
+  }
+
+  function requestScreenshotPermission() {
+    return new Promise(function(resolve) {
+      chrome.permissions.request({ origins: ['<all_urls>'] }, resolve);
+    });
+  }
+
   // Toggle chips
   togglesContainer.addEventListener('click', function(e) {
     var btn = e.target.closest('.toggle-chip');
     if (!btn) return;
     var key = btn.getAttribute('data-key');
+
+    if (key === 'screenshot' && !dumpToggles[key]) {
+      requestScreenshotPermission().then(function(granted) {
+        if (granted) {
+          dumpToggles[key] = true;
+          applyToggleUI();
+          chrome.storage.local.set({ dumpToggles: dumpToggles });
+        } else {
+          statusEl.textContent = 'Screenshot requires page access permission.';
+          statusEl.className = 'status error';
+        }
+      });
+      return;
+    }
+
     dumpToggles[key] = !dumpToggles[key];
     applyToggleUI();
     chrome.storage.local.set({ dumpToggles: dumpToggles });
@@ -45,8 +83,20 @@
   // Sync toggles changed via panel
   chrome.storage.onChanged.addListener(function(changes) {
     if (changes.dumpToggles) {
-      dumpToggles = Object.assign({}, DEFAULT_TOGGLES, changes.dumpToggles.newValue);
-      applyToggleUI();
+      var newToggles = Object.assign({}, DEFAULT_TOGGLES, changes.dumpToggles.newValue);
+      if (newToggles.screenshot && !dumpToggles.screenshot) {
+        hasScreenshotPermission().then(function(granted) {
+          if (!granted) {
+            newToggles.screenshot = false;
+            chrome.storage.local.set({ dumpToggles: newToggles });
+          }
+          dumpToggles = newToggles;
+          applyToggleUI();
+        });
+      } else {
+        dumpToggles = newToggles;
+        applyToggleUI();
+      }
     }
   });
 
