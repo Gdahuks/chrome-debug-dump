@@ -171,23 +171,51 @@
 
   function downloadOneFile(url, filename) {
     return new Promise(function(resolve, reject) {
+      var id = null;
+      var settled = false;
+      var buffered = [];
+
+      function settle(delta) {
+        if (settled || !delta.state) return;
+        if (delta.state.current === 'complete') {
+          settled = true;
+          chrome.downloads.onChanged.removeListener(onChanged);
+          chrome.downloads.search({ id: id }, function(items) {
+            resolve(items && items[0] ? items[0].filename : '');
+          });
+        } else if (delta.state.current === 'interrupted') {
+          settled = true;
+          chrome.downloads.onChanged.removeListener(onChanged);
+          reject(new Error('Download interrupted'));
+        }
+      }
+
+      function onChanged(delta) {
+        if (id === null) { buffered.push(delta); return; }
+        if (delta.id !== id) return;
+        settle(delta);
+      }
+
+      // Register listener BEFORE starting download to avoid missing
+      // completion events on near-instant data: URL downloads
+      chrome.downloads.onChanged.addListener(onChanged);
+
       chrome.downloads.download({
         url: url, filename: filename, conflictAction: 'uniquify', saveAs: false
       }, function(downloadId) {
-        if (chrome.runtime.lastError) { reject(new Error(chrome.runtime.lastError.message)); return; }
-        function onChanged(delta) {
-          if (delta.id !== downloadId || !delta.state) return;
-          if (delta.state.current === 'complete') {
-            chrome.downloads.onChanged.removeListener(onChanged);
-            chrome.downloads.search({ id: downloadId }, function(items) {
-              resolve(items && items[0] ? items[0].filename : '');
-            });
-          } else if (delta.state.current === 'interrupted') {
-            chrome.downloads.onChanged.removeListener(onChanged);
-            reject(new Error('Download interrupted'));
-          }
+        if (chrome.runtime.lastError) {
+          settled = true;
+          chrome.downloads.onChanged.removeListener(onChanged);
+          reject(new Error(chrome.runtime.lastError.message));
+          return;
         }
-        chrome.downloads.onChanged.addListener(onChanged);
+        id = downloadId;
+        // Replay any events that arrived before we had the id
+        for (var i = 0; i < buffered.length; i++) {
+          if (buffered[i].id === id) settle(buffered[i]);
+          if (settled) break;
+        }
+        buffered = null;
       });
     });
   }
@@ -525,7 +553,7 @@
     });
   }
 
-  // Separate from sendMsg - doesn't reject on captureVisibleTab errors
+  // Resolves to null on error instead of rejecting
   function captureViewport() {
     return new Promise(function(resolve) {
       chrome.runtime.sendMessage({ action: 'captureViewport', tabId: chrome.devtools.inspectedWindow.tabId }, function(response) {
