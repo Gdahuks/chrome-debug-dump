@@ -174,18 +174,23 @@
       var id = null;
       var settled = false;
       var buffered = [];
+      var timeout = null;
+
+      function cleanup() {
+        settled = true;
+        chrome.downloads.onChanged.removeListener(onChanged);
+        if (timeout) { clearTimeout(timeout); timeout = null; }
+      }
 
       function settle(delta) {
         if (settled || !delta.state) return;
         if (delta.state.current === 'complete') {
-          settled = true;
-          chrome.downloads.onChanged.removeListener(onChanged);
+          cleanup();
           chrome.downloads.search({ id: id }, function(items) {
             resolve(items && items[0] ? items[0].filename : '');
           });
         } else if (delta.state.current === 'interrupted') {
-          settled = true;
-          chrome.downloads.onChanged.removeListener(onChanged);
+          cleanup();
           reject(new Error('Download interrupted'));
         }
       }
@@ -200,12 +205,19 @@
       // completion events on near-instant data: URL downloads
       chrome.downloads.onChanged.addListener(onChanged);
 
+      // Safety timeout to prevent listener leak if download never reaches
+      // a terminal state (should not happen in practice)
+      timeout = setTimeout(function() {
+        if (settled) return;
+        cleanup();
+        reject(new Error('Download timed out: ' + filename));
+      }, 60000);
+
       chrome.downloads.download({
         url: url, filename: filename, conflictAction: 'uniquify', saveAs: false
       }, function(downloadId) {
         if (chrome.runtime.lastError) {
-          settled = true;
-          chrome.downloads.onChanged.removeListener(onChanged);
+          cleanup();
           reject(new Error(chrome.runtime.lastError.message));
           return;
         }
