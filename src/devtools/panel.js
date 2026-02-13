@@ -150,32 +150,24 @@
     return new Promise(function(resolve) {
       chrome.permissions.contains({ permissions: ['clipboardWrite'] }, resolve);
     }).then(function(hasClipPerm) {
-      if (hasClipPerm) {
-        // Primary: execCommand in panel (works with clipboardWrite permission, panel is focused)
-        try {
-          var ta = document.createElement('textarea');
-          ta.value = text;
-          ta.style.position = 'fixed';
-          ta.style.opacity = '0';
-          document.body.appendChild(ta);
-          var ok;
-          try {
-            ta.select();
-            ok = document.execCommand('copy');
-          } finally {
-            document.body.removeChild(ta);
-          }
-          if (ok) return Promise.resolve();
-        } catch (e) {
-          // execCommand path failed, fall through to evalInPage
-        }
-      }
-
-      // Fallback: clipboard API via inspected page (catch in page context to avoid uncaught rejection)
-      var safe = JSON.stringify(text);
-      return evalInPage("navigator.clipboard.writeText(" + safe + ").then(function(){return true}).catch(function(){return false})").then(function(result) {
-        if (!result) throw new Error('copy failed');
+      if (hasClipPerm) return true;
+      // Request permission (works because we're in a user gesture chain)
+      return new Promise(function(resolve) {
+        chrome.permissions.request({ permissions: ['clipboardWrite'] }, resolve);
       });
+    }).then(function(hasClipPerm) {
+      if (!hasClipPerm) throw new Error('Clipboard permission denied');
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      try {
+        ta.select();
+        if (!document.execCommand('copy')) throw new Error('execCommand failed');
+      } finally {
+        document.body.removeChild(ta);
+      }
     });
   }
 
