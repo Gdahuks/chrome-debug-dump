@@ -374,10 +374,28 @@ describe('Console Hook - Unhandled Promise Rejections', function() {
 // ---- Stack traces & Error.stackTraceLimit ----
 
 describe('Console Hook - Stack Traces', function() {
-  test('sets Error.stackTraceLimit to 50', function() {
+  test('sets Error.stackTraceLimit to at least 50', function() {
     var ctx = createHookedContext().context;
     var limit = vm.runInContext('Error.stackTraceLimit', ctx);
-    expect(limit).toBe(50);
+    expect(limit).toBeGreaterThanOrEqual(50);
+  });
+
+  test('does not lower Error.stackTraceLimit if already >= 50', function() {
+    var eventListeners = {};
+    var context = {
+      window: {
+        addEventListener: function(event, handler) { eventListeners[event] = handler; }
+      },
+      console: {
+        log: function() {}, warn: function() {}, error: function() {},
+        info: function() {}, debug: function() {}
+      }
+    };
+    vm.createContext(context);
+    vm.runInContext('Error.stackTraceLimit = 200', context);
+    vm.runInContext(HOOK_CODE, context);
+    var limit = vm.runInContext('Error.stackTraceLimit', context);
+    expect(limit).toBe(200);
   });
 
   test('console calls include stackTrace field', function() {

@@ -5,8 +5,7 @@ const CONSOLE_HOOK_CODE = `
   window.__debugConsoleHooked = true;
   window.__debugConsoleLogs = [];
   var MAX_ENTRIES = 1000;
-  var ORIG_STACK_LIMIT = Error.stackTraceLimit;
-  Error.stackTraceLimit = 50;
+  if (!(Error.stackTraceLimit >= 50)) Error.stackTraceLimit = 50;
 
   function pushEntry(level, args, stackTrace) {
     var entry = {

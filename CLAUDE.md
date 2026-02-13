@@ -8,13 +8,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Development
 
-No build system, package manager, or dependencies. Pure vanilla JavaScript loaded directly by the manifest. To develop:
+No build system — pure vanilla JavaScript loaded directly by the manifest. To develop:
 
 1. Open `chrome://extensions/` with Developer Mode enabled
 2. "Load unpacked" pointing to the `src/` directory
 3. After code changes, click the refresh icon on the extension card (or reload the extension)
 
-No tests, linting, or formatting tools are configured.
+### Testing
+
+- **Framework**: Jest (`npm test`)
+- **Tests**: `tests/console-hook.test.js` — unit tests for the console hook injection
+- **CI/CD**: GitHub Actions — PR checks run tests on every PR to `develop`; release pipeline builds zip + GitHub Release on tag push
 
 ## Architecture
 
@@ -28,18 +32,19 @@ No tests, linting, or formatting tools are configured.
 - Captures HAR via `chrome.devtools.network.getHAR()`
 - Monitors network idle via `chrome.devtools.network.onRequestFinished` before collecting data
 - Listens to `chrome.storage.onChanged` to pick up settings/toggles changed via popup and keyboard shortcut triggers
+- Downloads files directly via `chrome.downloads.download()` (bypasses 64MB `sendMessage` limit)
 
 ### Supporting Files
 - **`src/devtools/devtools.js`** — Creates the DevTools panel, injects the console hook (inline via `eval`) on panel show and page navigation
-- **`src/service-worker.js`** — Background worker handling `captureViewport` (tab screenshot) and `dumpAll` (file downloads) messages; relays keyboard shortcut via `sendMessage` + `storage.local.set` (dual delivery)
+- **`src/service-worker.js`** — Background worker handling `captureViewport` (tab screenshot) messages; relays keyboard shortcut via `chrome.storage.local.set`
 
 ### Key Technical Details
 - **Screenshot stitching**: Scrolls page in viewport-sized chunks, hides fixed elements (visibility:hidden) and un-sticks sticky elements (position:relative) for chunks after the first, then composites via canvas accounting for device pixel ratio
 - **Max screenshot height**: 16384px
-- **Downloads**: Uses direct `chrome.downloads.download()` to bypass the 64MB `sendMessage` limit; monitors completion via `chrome.downloads.onChanged`
+- **Downloads**: Panel calls `chrome.downloads.download()` directly; monitors completion via `chrome.downloads.onChanged` (listener registered before download starts to avoid race conditions with instant data: URL completions)
 - **Capture toggles**: 5 toggleable types (har, html, console, meta, screenshot) stored in `chrome.storage.local` as `dumpToggles`; disabled types are skipped in `performCapture()` and shown as yellow "skipped" in progress chips
 - **Clipboard**: DevTools panels block `navigator.clipboard`; workaround uses `chrome.devtools.inspectedWindow.eval()` to write clipboard via the inspected page
-- **Keyboard shortcut**: Dual delivery — `chrome.runtime.sendMessage` (primary) + `chrome.storage.local.set({ triggerDump })` (fallback); works only with DevTools open
+- **Keyboard shortcut**: `chrome.storage.local.set({ triggerDump })` from service worker; `devtools.js` listens via `storage.onChanged` and relays to panel; works only with DevTools open
 - **Settings** stored in `chrome.storage.local`: `basePath` (download folder), `idleTime` (wait seconds), `dumpToggles` (capture type toggles)
 
 ## File Map
@@ -47,8 +52,13 @@ No tests, linting, or formatting tools are configured.
 | File | Role |
 |------|------|
 | `src/manifest.json` | Extension manifest (permissions, entry points) |
-| `src/service-worker.js` | Background: screenshots & file downloads |
+| `src/service-worker.js` | Background: tab screenshots & keyboard shortcut relay |
 | `src/panel.css` | Shared dark-theme styling |
 | `src/popup/popup.html/js` | Settings UI (shared with panel) |
-| `src/devtools/panel.html/js` | DevTools panel UI & dump logic |
-| `src/devtools/devtools.html/js` | DevTools page & panel creation |
+| `src/devtools/panel.html/js` | DevTools panel UI, dump logic & file downloads |
+| `src/devtools/devtools.html/js` | DevTools page, panel creation & console hook injection |
+| `tests/console-hook.test.js` | Unit tests for the console hook |
+| `package.json` | Dev dependencies (Jest) and test script |
+| `.github/workflows/pr.yml` | CI: runs tests on PRs to develop |
+| `.github/workflows/release.yml` | CD: builds zip & creates GitHub Release on tag push |
+| `.github/release.yml` | Auto-generated release notes configuration |
