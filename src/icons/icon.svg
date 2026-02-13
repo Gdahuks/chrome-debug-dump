@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#6366F1"/>
+      <stop offset="100%" stop-color="#4338CA"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="24" fill="url(#bg)"/>
+  <!-- Left brace -->
+  <path d="M40 18 Q30 18, 30 28 L30 50 Q30 58, 20 64 Q30 70, 30 78 L30 100 Q30 110, 40 110"
+        fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="7" stroke-linecap="round"/>
+  <!-- Right brace -->
+  <path d="M88 18 Q98 18, 98 28 L98 50 Q98 58, 108 64 Q98 70, 98 78 L98 100 Q98 110, 88 110"
+        fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="7" stroke-linecap="round"/>
+  <!-- Download tray -->
+  <path d="M42 93 L42 84 L86 84 L86 93" fill="none" stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Arrow into tray -->
+  <line x1="64" y1="30" x2="64" y2="72" stroke="white" stroke-width="6" stroke-linecap="round"/>
+  <polyline points="48,60 64,78 80,60" fill="none" stroke="white" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
